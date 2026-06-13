@@ -72,7 +72,8 @@
     mode = m;
     if (window.QRPortraits) { QRPortraits.request(fighters[0]); QRPortraits.request(fighters[1]); }
     const first = fighters[0].spd >= fighters[1].spd ? 0 : 1; // 素早さが高い方が先攻（同値は左）
-    battle = { seq: [], i: 0, timer: 1.0, log: sideLabel(first) + ' が先攻！' };
+    fighters[0].fade = 1; fighters[1].fade = 1;
+    battle = { seq: [], i: 0, timer: 1.3, ko: null, log: sideLabel(first) + ' が先攻！' };
     for (let t = 0; t < 3; t++) { battle.seq.push(first, 1 - first); } // 3 ターン × 2 攻撃
     particles = []; floaters = []; projectiles = []; shake = 0; flash = 0;
     winner = -1; resultTimer = 0; slowmo = 1;
@@ -148,8 +149,8 @@
     const aff = C.affinityMultiplier(A.attribute, B.attribute);
     const dmg = Math.max(1, Math.round(A.atk * 0.4 * aff));
     B.hp = Math.max(0, B.hp - dmg); B.hitFlash = 1;
-    burst(cb.x, cb.y, A.meta.glow, 16, 7); addShake(9);
-    floatText(cb.x + rand(-20, 20), cb.y - 30, (aff > 1 ? '効果抜群! ' : '') + dmg, aff > 1 ? '#ffe14d' : '#fff', 42);
+    burst(cb.x, cb.y, A.meta.glow, 30, 11); addShake(18); addFlash(A.meta.glow, 0.22);
+    floatText(cb.x + rand(-20, 20), cb.y - 30, (aff > 1 ? '効果抜群! ' : '') + dmg, aff > 1 ? '#ffe14d' : '#fff', 54);
     battle.log = aL + ' の攻撃 → ' + dmg + ' ダメージ' + (aff > 1 ? '（効果抜群）' : '');
     if (B.hp <= 0) return;
     // カウンター：B が確率で反撃
@@ -157,7 +158,7 @@
       const cd = Math.max(1, Math.round(B.atk * 0.4 * C.affinityMultiplier(B.attribute, A.attribute)));
       A.hp = Math.max(0, A.hp - cd); A.hitFlash = 1;
       const ca = charCenter(A);
-      burst(ca.x, ca.y, B.meta.glow, 14, 6); addShake(8);
+      burst(ca.x, ca.y, B.meta.glow, 22, 9); addShake(14); addFlash(B.meta.glow, 0.2);
       floatText(ca.x, ca.y - 30, 'COUNTER ' + cd, '#ff7be0', 36);
       battle.log += '  ' + bL + ' のカウンター → ' + cd;
     }
@@ -178,8 +179,8 @@
     floaters = floaters.filter((f) => f.life > 0);
     shake *= 0.86; flash *= 0.9;
     for (const p of projectiles) {
-      p.t += dt / 0.16; const e = p.t < 1 ? p.t : 1;
-      p.x = p.sx + (p.tx - p.sx) * e; p.y = p.sy + (p.ty - p.sy) * e - Math.sin(e * Math.PI) * 90;
+      p.t += dt / 0.32; const e = p.t < 1 ? p.t : 1;
+      p.x = p.sx + (p.tx - p.sx) * e; p.y = p.sy + (p.ty - p.sy) * e - Math.sin(e * Math.PI) * 120;
     }
     projectiles = projectiles.filter((p) => p.t < 1.05);
 
@@ -214,14 +215,25 @@
 
     if (state === 'BATTLE') {
       for (let i = 0; i < 2; i++) fighters[i].hitFlash = Math.max(0, fighters[i].hitFlash - dt * 4);
-      if (consumePressed('Space') || tap.any) { tap.any = false; battle.i = battle.seq.length; } // スキップ→判定
+      // KO 演出：負けた方をフェードアウトで消してから結果へ（重厚な締め）
+      if (battle.ko) {
+        const dur = 1.8; battle.ko.t += dt;
+        fighters[battle.ko.loser].fade = Math.max(0, 1 - battle.ko.t / dur);
+        if (Math.random() < 0.55) { const c = charCenter(fighters[battle.ko.loser]); burst(c.x + rand(-70, 70), c.y + rand(-90, 90), fighters[battle.ko.loser].meta.glow, 6, 9); }
+        if (battle.ko.t >= dur) finishBattle();
+        return;
+      }
       battle.timer -= dt;
       if (battle.timer <= 0) {
-        if (battle.i >= battle.seq.length || fighters[0].hp <= 0 || fighters[1].hp <= 0) {
-          finishBattle();
-        } else {
-          resolveAttack(battle.seq[battle.i]); battle.i++;
-          battle.timer = (fighters[0].hp <= 0 || fighters[1].hp <= 0) ? 0.7 : 0.95;
+        if (battle.i >= battle.seq.length) { finishBattle(); return; }
+        resolveAttack(battle.seq[battle.i]); battle.i++;
+        battle.timer = 1.5; // ゆったり重めのテンポ
+        if (fighters[0].hp <= 0 || fighters[1].hp <= 0) {
+          const loser = fighters[0].hp <= 0 ? 0 : 1;
+          battle.ko = { loser: loser, t: 0 };
+          addFlash('#fff', 0.9); addShake(32);
+          const c = charCenter(fighters[loser]); burst(c.x, c.y, fighters[loser].meta.glow, 70, 14);
+          battle.log = sideLabel(1 - loser) + ' の勝利！';
         }
       }
       return;
@@ -251,8 +263,12 @@
   // キャラを大きく描く（QR は表示しない＝秘密のコレクション感）。被弾は hitFlash。
   function drawCharacter(f) {
     const p = f.panel;
+    const a = (typeof f.fade === 'number') ? f.fade : 1;
+    if (a <= 0.001) return; // フェードアウトで消滅
+    if (a < 1) ctx.globalAlpha = a;
     if (window.QRPortraits) QRPortraits.drawBig(ctx, f, p.gx, p.gy, p.gsize, f.hitFlash || 0);
     else { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(p.gx, p.gy, p.gsize, p.gsize); ctx.strokeStyle = f.meta.color; ctx.lineWidth = 4; ctx.strokeRect(p.gx, p.gy, p.gsize, p.gsize); }
+    ctx.globalAlpha = 1;
   }
 
   function drawHeader(f) {
