@@ -29,9 +29,11 @@ fi
 CHROME="$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1)"
 if [ -n "$CHROME" ] && [ -z "${NO_BROWSER:-}" ]; then
   echo "[demo] launching fullscreen browser ..."
+  # アプリ窓モード（全画面にしない＝他の作業画面を潰さない）。大きさ/位置は自由に動かせる
   DISPLAY="${DISPLAY:-:1}" nohup "$CHROME" --no-sandbox --no-first-run --no-default-browser-check \
-    --start-fullscreen --use-fake-ui-for-media-stream --user-data-dir=/tmp/qrb-chrome-profile \
-    'http://localhost:5000/index.html' >/tmp/qrb_chrome.log 2>&1 &
+    --app='http://localhost:5000/index.html' --window-size=1280,760 --window-position=120,80 \
+    --use-fake-ui-for-media-stream --user-data-dir=/tmp/qrb-chrome-profile \
+    >/tmp/qrb_chrome.log 2>&1 &
 fi
 
 echo "[demo] READY → http://localhost:5000/"
