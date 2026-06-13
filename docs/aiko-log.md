@@ -33,3 +33,4 @@
 - `15:15 JST` **[aiko-dev]** 🫀 稼働中（直近: log(maid): 🫀 稼働中（直近: log(maid): 画面リスト docs/screens.md + 画面イシュー3件作成(#1タイトルP0/#2バトルP0/#3結果P1・いずれもgame.js baseline確認軸)。QR SMASH ARENAはbaseline実装済み））
 - `15:30 JST` **[aiko-pr]** 🫀 稼働中（直近: Show big AI character instead of QR; simplify rendering）
 - `15:45 JST` **[hisyo]** 🫀 稼働中（直近: Rename title to QRコードバトラー; remove character names）
+- `16:00 JST` **[maid]** 🫀 稼働中（直近: feat(char): キャラ一貫性のベースプロンプトを単一ソース化 + 既存キャラから抽出）
