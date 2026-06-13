@@ -147,7 +147,7 @@
     }
     // 命中：攻撃力ベース × 属性相性
     const aff = C.affinityMultiplier(A.attribute, B.attribute);
-    const dmg = Math.max(1, Math.round(A.atk * 0.4 * aff));
+    const dmg = Math.max(1, Math.round(A.atk * 0.22 * aff));
     B.hp = Math.max(0, B.hp - dmg); B.hitFlash = 1;
     burst(cb.x, cb.y, A.meta.glow, 30, 11); addShake(18); addFlash(A.meta.glow, 0.22);
     floatText(cb.x + rand(-20, 20), cb.y - 30, (aff > 1 ? '効果抜群! ' : '') + dmg, aff > 1 ? '#ffe14d' : '#fff', 54);
@@ -155,7 +155,7 @@
     if (B.hp <= 0) return;
     // カウンター：B が確率で反撃
     if (Math.random() * 100 < B.ctrPct) {
-      const cd = Math.max(1, Math.round(B.atk * 0.4 * C.affinityMultiplier(B.attribute, A.attribute)));
+      const cd = Math.max(1, Math.round(B.atk * 0.22 * C.affinityMultiplier(B.attribute, A.attribute)));
       A.hp = Math.max(0, A.hp - cd); A.hitFlash = 1;
       const ca = charCenter(A);
       burst(ca.x, ca.y, B.meta.glow, 22, 9); addShake(14); addFlash(B.meta.glow, 0.2);
@@ -164,10 +164,19 @@
     }
   }
 
-  function finishBattle() {
-    const a = fighters[0].hp, b = fighters[1].hp;
-    winner = a === b ? -2 : (a > b ? 0 : 1); // HP 0 即決も残 HP 判定もこの一行で成立
+  function gotoResult() {
     state = 'RESULT'; resultTimer = 0; slowmo = 0.25; addFlash('#fff', 0.6); addShake(18);
+  }
+  // 勝敗を確定し、敗者をフェードアウトさせる演出に入る（KO も判定も共通）
+  function endBattle() {
+    const a = fighters[0].hp, b = fighters[1].hp;
+    winner = a === b ? -2 : (a > b ? 0 : 1);
+    if (winner === -2) { gotoResult(); return; } // 引き分けは即結果
+    const loser = 1 - winner;
+    battle.ko = { loser: loser, t: 0 };
+    addFlash('#fff', 0.9); addShake(32);
+    const c = charCenter(fighters[loser]); burst(c.x, c.y, fighters[loser].meta.glow, 70, 14);
+    battle.log = sideLabel(winner) + ' の勝利！';
   }
 
   // ---- 更新 ----
@@ -220,21 +229,15 @@
         const dur = 1.8; battle.ko.t += dt;
         fighters[battle.ko.loser].fade = Math.max(0, 1 - battle.ko.t / dur);
         if (Math.random() < 0.55) { const c = charCenter(fighters[battle.ko.loser]); burst(c.x + rand(-70, 70), c.y + rand(-90, 90), fighters[battle.ko.loser].meta.glow, 6, 9); }
-        if (battle.ko.t >= dur) finishBattle();
+        if (battle.ko.t >= dur) gotoResult();
         return;
       }
       battle.timer -= dt;
       if (battle.timer <= 0) {
-        if (battle.i >= battle.seq.length) { finishBattle(); return; }
+        if (battle.i >= battle.seq.length) { endBattle(); return; }
         resolveAttack(battle.seq[battle.i]); battle.i++;
         battle.timer = 1.5; // ゆったり重めのテンポ
-        if (fighters[0].hp <= 0 || fighters[1].hp <= 0) {
-          const loser = fighters[0].hp <= 0 ? 0 : 1;
-          battle.ko = { loser: loser, t: 0 };
-          addFlash('#fff', 0.9); addShake(32);
-          const c = charCenter(fighters[loser]); burst(c.x, c.y, fighters[loser].meta.glow, 70, 14);
-          battle.log = sideLabel(1 - loser) + ' の勝利！';
-        }
+        if (fighters[0].hp <= 0 || fighters[1].hp <= 0) endBattle();
       }
       return;
     }
