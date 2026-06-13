@@ -68,11 +68,13 @@
   let combo = [0, 0], comboTimer = [0, 0], charge = [0, 0], superCount = [0, 0];
   let cpuTimer = 0;
   let winner = -1, resultTimer = 0, slowmo = 1;
-  let titlePreview = null, titleT = 0;
+  let titlePreview = null, titleT = 0, showcaseIdx = 0;
+  // タイトルで巡回表示するショーケース（肖像は事前生成済み → 即時表示）
+  const SHOWCASE = ['ドラゴン', 'フェニックス', 'カミナリ', 'もりのぬし', 'ひかりのきし', 'やみのおう'];
 
   const PANEL = [
-    { gx: 130, gy: 210, gsize: 360, side: 'left' },
-    { gx: 790, gy: 210, gsize: 360, side: 'right' },
+    { gx: 80, gy: 180, gsize: 420, side: 'left' },
+    { gx: 780, gy: 180, gsize: 420, side: 'right' },
   ];
 
   function urlParam(k) {
@@ -204,7 +206,14 @@
     projectiles = projectiles.filter((p) => p.t < 1.05);
 
     if (state === 'TITLE') {
-      if (!titlePreview || titleT > 2.2) { titlePreview = [makeFighter(0), makeFighter(1)]; titleT = 0; }
+      if (!titlePreview || titleT > 2.4) {
+        const a = SHOWCASE[showcaseIdx % SHOWCASE.length];
+        const b = SHOWCASE[(showcaseIdx + 1) % SHOWCASE.length];
+        showcaseIdx += 2;
+        titlePreview = [makeFighter(0, a), makeFighter(1, b)];
+        if (window.QRPortraits) { QRPortraits.request(titlePreview[0]); QRPortraits.request(titlePreview[1]); }
+        titleT = 0;
+      }
       if (consumePressed('Digit1') || consumePressed('Numpad1')) startRound('1P');
       if (consumePressed('Digit2') || consumePressed('Numpad2')) startRound('2P');
       if (tap.p1 || tap.p2) { tap.p1 = tap.p2 = false; startRound('1P'); }
@@ -271,74 +280,48 @@
     for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
   }
 
-  function drawGrid(f) {
-    const cell = f.panel.gsize / f.size;
-    const gx = f.panel.gx, gy = f.panel.gy;
-    // 背景ボード
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.fillRect(gx - 10, gy - 10, f.panel.gsize + 20, f.panel.gsize + 20);
-    if (f.hitFlash > 0) {
-      ctx.fillStyle = 'rgba(255,80,80,' + f.hitFlash * 0.3 + ')';
-      ctx.fillRect(gx - 10, gy - 10, f.panel.gsize + 20, f.panel.gsize + 20);
+  // キャラを大きく描く（QR は表示しない＝秘密のコレクション感を保つ）。
+  // 肖像 or プレースホルダの描き分けは portraits.js が担当。被弾は hitFlash。
+  function drawCharacter(f) {
+    const p = f.panel;
+    if (window.QRPortraits) {
+      QRPortraits.drawBig(ctx, f, p.gx, p.gy, p.gsize, f.hitFlash || 0);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(p.gx, p.gy, p.gsize, p.gsize);
+      ctx.strokeStyle = f.meta.color; ctx.lineWidth = 4;
+      ctx.strokeRect(p.gx, p.gy, p.gsize, p.gsize);
     }
-    for (let y = 0; y < f.size; y++) {
-      for (let x = 0; x < f.size; x++) {
-        if (!f.alive[y][x]) continue;
-        const finder = C.isFinder(x, y, f.size);
-        ctx.fillStyle = finder ? '#e8edff' : f.meta.color;
-        ctx.fillRect(gx + x * cell + 0.5, gy + y * cell + 0.5, cell - 1, cell - 1);
-      }
-    }
-    // ボード枠
-    ctx.strokeStyle = f.meta.color; ctx.lineWidth = 3; ctx.globalAlpha = 0.8;
-    ctx.strokeRect(gx - 10, gy - 10, f.panel.gsize + 20, f.panel.gsize + 20);
-    ctx.globalAlpha = 1;
   }
 
   function drawHeader(f, idx) {
     const left = f.panel.side === 'left';
-    const x = left ? f.panel.gx - 10 : f.panel.gx + f.panel.gsize + 10;
+    const x = left ? f.panel.gx : f.panel.gx + f.panel.gsize;
     const ax = left ? 'left' : 'right';
     ctx.textAlign = ax;
-    // 属性チップ
-    ctx.fillStyle = f.meta.color;
-    ctx.font = 'bold 26px system-ui, sans-serif';
-    ctx.fillText(f.meta.label + ' / ' + f.attribute, x, 80);
-    // 名前
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 34px system-ui, sans-serif';
-    ctx.fillText(f.name, x, 118);
-    // レア度
-    ctx.fillStyle = f.rarityMeta.color;
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText('★' + f.rarityMeta.label + '  ATK ' + f.atk + '  SPD ' + f.spd, x, 150);
-    // HPバー
-    const bw = f.panel.gsize + 20, bx = f.panel.gx - 10;
-    const ratio = f.coreRemaining / f.maxCore;
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(bx, 170, bw, 18);
+    ctx.fillStyle = f.meta.color; ctx.font = 'bold 24px system-ui';
+    ctx.fillText(f.meta.label + ' / ' + f.attribute, x, 56);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 32px system-ui';
+    ctx.fillText(f.name, x, 92);
+    ctx.fillStyle = f.rarityMeta.color; ctx.font = 'bold 20px system-ui';
+    ctx.fillText('★' + f.rarityMeta.label + '  ATK ' + f.atk + '  SPD ' + f.spd, x, 120);
+    // HP バー（キャラの上）
+    const bw = f.panel.gsize, bx = f.panel.gx, ratio = f.coreRemaining / f.maxCore;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(bx, 138, bw, 16);
     ctx.fillStyle = ratio > 0.3 ? f.meta.color : '#ff3b3b';
     const fillW = bw * ratio;
-    ctx.fillRect(left ? bx : bx + bw - fillW, 170, fillW, 18);
-    ctx.textAlign = ax;
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px system-ui';
-    ctx.fillText(f.coreRemaining + ' / ' + f.maxCore, x, 204 - 18);
-
-    // チャージゲージ
-    const cy = f.panel.gy + f.panel.gsize + 22;
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(bx, cy, bw, 22);
+    ctx.fillRect(left ? bx : bx + bw - fillW, 138, fillW, 16);
+    // チャージゲージ（キャラの下）
+    const cy = f.panel.gy + f.panel.gsize + 14;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(bx, cy, bw, 20);
     ctx.fillStyle = f.meta.glow;
-    ctx.fillRect(left ? bx : bx + bw - bw * (charge[idx] / 100), cy, bw * (charge[idx] / 100), 22);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#0a0a0a'; ctx.font = 'bold 14px system-ui';
-    ctx.fillText('CHARGE', bx + bw / 2, cy + 16);
-
+    ctx.fillRect(left ? bx : bx + bw - bw * (charge[idx] / 100), cy, bw * (charge[idx] / 100), 20);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#0a0a0a'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CHARGE', bx + bw / 2, cy + 15);
     // コンボ
     if (combo[idx] > 1) {
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffe14d';
-      ctx.font = 'bold ' + (28 + Math.min(combo[idx], 20)) + 'px system-ui';
+      ctx.textAlign = 'center'; ctx.fillStyle = '#ffe14d';
+      ctx.font = 'bold ' + (30 + Math.min(combo[idx], 20)) + 'px system-ui';
       ctx.fillText(combo[idx] + ' COMBO', f.panel.gx + f.panel.gsize / 2, f.panel.gy + f.panel.gsize / 2);
     }
   }
@@ -392,8 +375,8 @@
     if (titlePreview) {
       titlePreview[0].panel = PANEL[0]; titlePreview[1].panel = PANEL[1];
       titlePreview[0].hitFlash = 0; titlePreview[1].hitFlash = 0;
-      ctx.globalAlpha = 0.5;
-      drawGrid(titlePreview[0]); drawGrid(titlePreview[1]);
+      ctx.globalAlpha = 0.4;
+      drawCharacter(titlePreview[0]); drawCharacter(titlePreview[1]);
       ctx.globalAlpha = 1;
     }
     ctx.save();
@@ -426,35 +409,30 @@
   }
 
   function drawResult() {
-    // 戦闘画面を背後に
-    drawTimer();
-    for (let i = 0; i < 2; i++) { drawGrid(fighters[i]); drawHeader(fighters[i], i); }
-    drawProjectiles(); drawEffects();
-
-    ctx.fillStyle = 'rgba(0,0,0,' + clamp(resultTimer, 0, 0.6) + ')';
-    ctx.fillRect(0, 0, W, H);
+    // シンプルに：暗転 → 勝者キャラを中央に大きく
+    ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, H);
+    drawEffects();
     ctx.textAlign = 'center';
     if (winner === -2) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 90px system-ui';
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 96px system-ui';
       ctx.fillText('DRAW', W / 2, H / 2);
     } else {
       const f = fighters[winner];
-      ctx.fillStyle = f.meta.glow;
-      ctx.font = 'bold 110px system-ui';
+      const sz = 320, cx = W / 2 - sz / 2, cy = 110;
+      if (window.QRPortraits) QRPortraits.drawBig(ctx, f, cx, cy, sz, 0);
+      ctx.fillStyle = f.meta.glow; ctx.font = 'bold 70px system-ui';
       ctx.shadowColor = f.meta.color; ctx.shadowBlur = 40;
-      ctx.fillText('K.O.', W / 2, H / 2 - 40);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 44px system-ui';
+      ctx.fillText('K.O.', W / 2, cy + sz + 68); ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 40px system-ui';
       const who = mode === '1P' ? (winner === 0 ? 'YOU WIN!' : 'CPU WIN') : ('PLAYER ' + (winner + 1) + ' WIN!');
-      ctx.fillText(who, W / 2, H / 2 + 40);
-      ctx.fillStyle = f.meta.color; ctx.font = 'bold 30px system-ui';
-      ctx.fillText(f.name + '  (' + f.attribute + '・' + f.rarityMeta.label + ')', W / 2, H / 2 + 90);
-      if (window.QRPortraits) QRPortraits.draw(ctx, f, W / 2 - 90, 95, 180);
+      ctx.fillText(who, W / 2, cy + sz + 116);
+      ctx.fillStyle = f.meta.color; ctx.font = 'bold 26px system-ui';
+      ctx.fillText(f.name + '  (' + f.attribute + '・' + f.rarityMeta.label + ')', W / 2, cy + sz + 150);
     }
     if (resultTimer > 1.0) {
       ctx.globalAlpha = (Math.sin(titleT * 5) + 1) / 2;
       ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 26px system-ui';
-      ctx.fillText('PRESS  SPACE  TO  CONTINUE', W / 2, H - 60);
+      ctx.fillText('PRESS  SPACE  TO  CONTINUE', W / 2, H - 40);
       ctx.globalAlpha = 1;
     }
   }
@@ -469,11 +447,7 @@
       drawTitle();
     } else if (state === 'BATTLE') {
       drawTimer();
-      for (let i = 0; i < 2; i++) { drawGrid(fighters[i]); drawHeader(fighters[i], i); }
-      if (window.QRPortraits) {
-        QRPortraits.draw(ctx, fighters[0], 6, 300, 118);
-        QRPortraits.draw(ctx, fighters[1], W - 124, 300, 118);
-      }
+      for (let i = 0; i < 2; i++) { drawCharacter(fighters[i]); drawHeader(fighters[i], i); }
       drawProjectiles(); drawEffects();
     } else if (state === 'RESULT') {
       drawResult();
