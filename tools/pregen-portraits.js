@@ -16,17 +16,8 @@ const C = globalThis.QRCore;
 const ENDPOINT = (process.env.IMGGEN_ENDPOINT || 'http://127.0.0.1:8771') + '/generate';
 const OUT = path.join(__dirname, '..', 'assets', 'portraits');
 
-const ROLE_EN = {
-  'アタッカー': 'fierce attacker', 'タンク': 'armored guardian',
-  'サポート': 'mystic support', 'ヒーラー': 'gentle healer',
-};
-function promptFor(f) {
-  const el = (f.meta && f.meta.label) || 'elemental';
-  const role = ROLE_EN[f.role] || 'fighter';
-  return `a tier ${f.tier || 'B'} ${el.toLowerCase()} ${role} monster, fighting game ` +
-    `character, anime game art, bold outline, dynamic pose, vivid colors, ` +
-    `centered, plain dark background, no text`;
-}
+// 肖像プロンプトの一貫性ベースは core.js の単一ソース（QRCore.portraitPrompt）を使う。
+const promptFor = (f) => C.portraitPrompt(f);
 
 const DEFAULT = ['ドラゴン', 'フェニックス', 'カミナリ', 'もりのぬし', 'ひかりのきし', 'やみのおう'];
 

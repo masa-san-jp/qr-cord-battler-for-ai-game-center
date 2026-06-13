@@ -15,16 +15,13 @@
   var ENDPOINT = (global.IMGGEN_ENDPOINT || 'http://127.0.0.1:8771') + '/generate';
   var cache = Object.create(null); // hex -> { img, state, ... }
 
-  var ROLE_EN = {
-    'アタッカー': 'fierce attacker', 'タンク': 'armored guardian',
-    'サポート': 'mystic support', 'ヒーラー': 'gentle healer',
-  };
+  // 肖像プロンプトの一貫性ベースは core.js の単一ソース（QRCore.portraitPrompt）。
   function promptFor(f) {
+    if (global.QRCore && global.QRCore.portraitPrompt) return global.QRCore.portraitPrompt(f);
     var el = (f.meta && f.meta.label) || 'elemental';
-    var role = ROLE_EN[f.role] || 'fighter';
-    return 'a tier ' + (f.tier || 'B') + ' ' + el.toLowerCase() + ' ' + role +
-      ' monster, fighting game character, anime game art, bold outline, ' +
-      'dynamic pose, vivid colors, centered, plain dark background, no text';
+    return 'a tier ' + (f.tier || 'B') + ' ' + el.toLowerCase() + ' fighter monster, ' +
+      'full-body fighting game character, anime game art, bold black outline, cel shaded, ' +
+      'dynamic battle-ready pose, glowing elemental aura, plain dark gradient background, no text';
   }
 
   function roundPath(ctx, x, y, w, h, r) {

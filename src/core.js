@@ -97,9 +97,34 @@
     };
   }
 
+  // --- キャラ肖像の一貫性ベース ---------------------------------------
+  // 既に生成したファイター群（角ありの鬼系クリーチャー・東洋風の装甲と帯・
+  // 太い黒縁のセルシェード・属性オーラ・ダーク背景）から抽出した共通の絵柄。
+  // 全ファイターをこの世界観で揃えるため、肖像プロンプトは必ずこの BASE を含める。
+  // 可変部（属性/ロール/ティア）だけが個体差になる。
+  const ROLE_EN = {
+    'アタッカー': 'fierce attacker', 'タンク': 'armored guardian',
+    'サポート': 'mystic support', 'ヒーラー': 'gentle healer',
+  };
+  const CHAR_BASE_PROMPT =
+    'full-body fighting game character, anime game art, bold black outline, ' +
+    'cel shaded, dynamic battle-ready pose, horned demon-creature humanoid in ' +
+    'ornate oriental armor and sashes, clawed hands and feet, glowing elemental aura, ' +
+    'vivid saturated colors, dramatic rim light, centered single character, ' +
+    'plain dark gradient background, subtle vignette, no text, no logo, no UI';
+
+  // ファイター f から肖像生成プロンプトを組む（可変部 + 共通 BASE）。
+  function portraitPrompt(f) {
+    const el = (f && f.meta && f.meta.label) || 'elemental';
+    const role = (f && ROLE_EN[f.role]) || 'fighter';
+    const tier = (f && f.tier) || 'B';
+    return 'a tier ' + tier + ' ' + el.toLowerCase() + ' ' + role + ' monster, ' + CHAR_BASE_PROMPT;
+  }
+
   global.QRCore = {
     hashHex, hashToSeed, mulberry32,
     ATTRIBUTES, ATTR_META, TIERS,
     affinityMultiplier, determineTier, generateFighter,
+    ROLE_EN, CHAR_BASE_PROMPT, portraitPrompt,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
