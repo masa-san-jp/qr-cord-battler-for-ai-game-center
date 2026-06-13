@@ -191,10 +191,9 @@
         if (window.QRPortraits) { QRPortraits.request(titlePreview[0]); QRPortraits.request(titlePreview[1]); }
         titleT = 0;
       }
-      if (consumePressed('Digit1') || consumePressed('Numpad1')) startRound('1P');
-      else if (consumePressed('Digit3') || consumePressed('Numpad3')) enterScan();
+      if (consumePressed('Digit1') || consumePressed('Numpad1')) enterScan();        // vs CPU = QR で自分を召喚 → CPU 戦
       else if (consumePressed('Digit2') || consumePressed('Numpad2')) startRound('2P');
-      else if (tap.any) { tap.any = false; startRound('1P'); }
+      else if (tap.any) { tap.any = false; enterScan(); }
       tap.any = false;
       return;
     }
@@ -318,11 +317,10 @@
     ctx.shadowBlur = 0; ctx.fillStyle = '#7d8aa5'; ctx.font = 'bold 24px system-ui';
     ctx.fillText('QR が授ける戦士で、3 ターンの自動バトル', W / 2, 392);
     const blink = (Math.sin(titleT * 5) + 1) / 2; ctx.globalAlpha = 0.55 + blink * 0.45;
-    ctx.fillStyle = '#5ad1ff'; ctx.font = 'bold 42px system-ui'; ctx.fillText('▶ [3] QR を読み込んで召喚', W / 2, 506);
-    ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 36px system-ui'; ctx.fillText('[1] 1P vs CPU（ランダム）', W / 2, 558);
-    ctx.fillStyle = '#4cd964'; ctx.fillText('[2] 2P 対戦', W / 2, 604);
+    ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 46px system-ui'; ctx.fillText('▶ [1] vs CPU', W / 2, 538);
+    ctx.fillStyle = '#4cd964'; ctx.fillText('▶ [2] 2P 対戦', W / 2, 598);
     ctx.globalAlpha = 1; ctx.fillStyle = '#55607a'; ctx.font = 'bold 19px system-ui';
-    ctx.fillText('数字キーで選択（画面タップ＝1P）', W / 2, 660);
+    ctx.fillText('QR を読み込んで自分の戦士を召喚 → 対戦', W / 2, 658);
     ctx.restore();
   }
 
