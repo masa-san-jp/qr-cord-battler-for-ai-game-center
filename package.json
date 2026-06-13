@@ -1,0 +1,11 @@
+{
+  "name": "qr-smash-arena",
+  "version": "0.1.0",
+  "description": "QRコードを連打で破壊するアーケード対戦ゲーム（qr-cord-battler 派生・ゲームセンター向け）",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes serve -l 5000 .",
+    "serve": "python3 -m http.server 5000"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>QR SMASH ARENA</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #03040a;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      touch-action: none;
+    }
+    #game {
+      image-rendering: pixelated;
+      box-shadow: 0 0 60px rgba(55,167,255,0.25);
+      background: #070912;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="1280" height="720"></canvas>
+  <script src="src/core.js"></script>
+  <script src="src/game.js"></script>
+</body>
+</html>
