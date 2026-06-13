@@ -98,6 +98,7 @@
     mode = m;
     const p1 = urlParam('p1'), p2 = urlParam('p2');
     fighters = [makeFighter(0, p1), makeFighter(1, p2)];
+    if (window.QRPortraits) { QRPortraits.request(fighters[0]); QRPortraits.request(fighters[1]); }
     timer = roundTime;
     combo = [0, 0]; comboTimer = [0, 0]; charge = [0, 0]; superCount = [0, 0];
     cpuTimer = rand(0.2, 0.5);
@@ -448,6 +449,7 @@
       ctx.fillText(who, W / 2, H / 2 + 40);
       ctx.fillStyle = f.meta.color; ctx.font = 'bold 30px system-ui';
       ctx.fillText(f.name + '  (' + f.attribute + '・' + f.rarityMeta.label + ')', W / 2, H / 2 + 90);
+      if (window.QRPortraits) QRPortraits.draw(ctx, f, W / 2 - 90, 95, 180);
     }
     if (resultTimer > 1.0) {
       ctx.globalAlpha = (Math.sin(titleT * 5) + 1) / 2;
@@ -468,6 +470,10 @@
     } else if (state === 'BATTLE') {
       drawTimer();
       for (let i = 0; i < 2; i++) { drawGrid(fighters[i]); drawHeader(fighters[i], i); }
+      if (window.QRPortraits) {
+        QRPortraits.draw(ctx, fighters[0], 6, 300, 118);
+        QRPortraits.draw(ctx, fighters[1], W - 124, 300, 118);
+      }
       drawProjectiles(); drawEffects();
     } else if (state === 'RESULT') {
       drawResult();
