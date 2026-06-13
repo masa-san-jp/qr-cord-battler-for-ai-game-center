@@ -35,3 +35,4 @@
 - `15:45 JST` **[hisyo]** 🫀 稼働中（直近: Rename title to QRコードバトラー; remove character names）
 - `16:00 JST` **[maid]** 🫀 稼働中（直近: feat(char): キャラ一貫性のベースプロンプトを単一ソース化 + 既存キャラから抽出）
 - `16:00 JST` **[maid]** 完了(0b1f5db): キャラ一貫性ベースプロンプト=単一ソース化。core.jsにQRCore.CHAR_BASE_PROMPT/portraitPrompt()→pregen+portraits.jsが参照。既存キャラから絵柄抽出(角あり鬼系/東洋装甲/黒縁セル/属性オーラ/ダーク背景)。docs/character-style.md+ショーケース6体再生成で統一
+- `16:15 JST` **[aiko-dev]** 🫀 稼働中（直近: Add webcam QR scan -> GB10 real-time fighter generation）
