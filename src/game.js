@@ -54,6 +54,7 @@
   ];
   function urlParam(k) { try { return new URLSearchParams(location.search).get(k); } catch (e) { return null; } }
   const pickShowcase = () => SHOWCASE[(Math.random() * SHOWCASE.length) | 0];
+  const sideLabel = (idx) => (mode === '1P' ? (idx === 0 ? 'あなた' : 'CPU') : ('PLAYER ' + (idx + 1)));
 
   function makeFighter(idx, payload) {
     const f = C.generateFighter(payload);
@@ -74,7 +75,7 @@
     if (window.QRPortraits) { QRPortraits.request(fighters[0]); QRPortraits.request(fighters[1]); }
     // ターン順：素早さが高い方が先攻（同値は先行=左）
     const first = fighters[0].spd >= fighters[1].spd ? 0 : 1;
-    battle = { seq: [], i: 0, timer: 1.0, log: first === 0 ? fighters[0].name + ' が先攻！' : fighters[1].name + ' が先攻！' };
+    battle = { seq: [], i: 0, timer: 1.0, log: sideLabel(first) + ' が先攻！' };
     for (let t = 0; t < 3; t++) { battle.seq.push(first, 1 - first); } // 3 ターン × 2 攻撃
     particles = []; floaters = []; projectiles = []; shake = 0; flash = 0;
     winner = -1; resultTimer = 0; slowmo = 1;
@@ -92,6 +93,7 @@
   function resolveAttack(aIdx) {
     const A = fighters[aIdx], B = fighters[1 - aIdx];
     if (A.hp <= 0 || B.hp <= 0) return;
+    const aL = sideLabel(aIdx), bL = sideLabel(1 - aIdx);
     fireFx(aIdx);
     // 回避率：相手(B)の HP と 防御が高いほど避けやすい。素早さ差も少し加味。
     let dodge = ((B.maxhp + B.def) / B.tierTotal) * 55 + (B.spd - A.spd) * 0.05;
@@ -99,7 +101,7 @@
     const cb = charCenter(B);
     if (Math.random() * 100 < dodge) {
       floatText(cb.x, cb.y - 40, 'MISS', '#9fb3d9', 38);
-      battle.log = A.name + ' の攻撃 → 回避！';
+      battle.log = aL + ' の攻撃 → 回避！';
       return;
     }
     // 命中：攻撃力ベース × 属性相性
@@ -108,7 +110,7 @@
     B.hp = Math.max(0, B.hp - dmg); B.hitFlash = 1;
     burst(cb.x, cb.y, A.meta.glow, 16, 7); addShake(9);
     floatText(cb.x + rand(-20, 20), cb.y - 30, (aff > 1 ? '効果抜群! ' : '') + dmg, aff > 1 ? '#ffe14d' : '#fff', 42);
-    battle.log = A.name + ' の攻撃 → ' + dmg + ' ダメージ' + (aff > 1 ? '（効果抜群）' : '');
+    battle.log = aL + ' の攻撃 → ' + dmg + ' ダメージ' + (aff > 1 ? '（効果抜群）' : '');
     if (B.hp <= 0) return;
     // カウンター：B が確率で反撃
     if (Math.random() * 100 < B.ctrPct) {
@@ -117,7 +119,7 @@
       const ca = charCenter(A);
       burst(ca.x, ca.y, B.meta.glow, 14, 6); addShake(8);
       floatText(ca.x, ca.y - 30, 'COUNTER ' + cd, '#ff7be0', 36);
-      battle.log += '  ' + B.name + ' のカウンター → ' + cd;
+      battle.log += '  ' + bL + ' のカウンター → ' + cd;
     }
   }
 
@@ -203,12 +205,10 @@
     const left = f.panel.side === 'left';
     const x = left ? f.panel.gx : f.panel.gx + f.panel.gsize;
     ctx.textAlign = left ? 'left' : 'right';
-    ctx.fillStyle = f.meta.color; ctx.font = 'bold 22px system-ui';
-    ctx.fillText(f.meta.label + ' / ' + f.attribute, x, 44);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 30px system-ui';
-    ctx.fillText(f.name, x, 80);
-    ctx.fillStyle = f.tierColor; ctx.font = 'bold 22px system-ui';
-    ctx.fillText('TIER ' + f.tier + '（計 ' + f.tierTotal + '）', x, 108);
+    ctx.fillStyle = f.meta.color; ctx.font = 'bold 26px system-ui';
+    ctx.fillText(f.meta.label + ' / ' + f.attribute, x, 62);
+    ctx.fillStyle = f.tierColor; ctx.font = 'bold 26px system-ui';
+    ctx.fillText('TIER ' + f.tier + '（計 ' + f.tierTotal + '）', x, 98);
     // HP バー（キャラ上）
     const bw = f.panel.gsize, bx = f.panel.gx, ratio = clamp(f.hp / f.maxhp, 0, 1);
     ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(bx, 122, bw, 18);
@@ -258,10 +258,10 @@
       ctx.globalAlpha = 0.4; drawCharacter(titlePreview[0]); drawCharacter(titlePreview[1]); ctx.globalAlpha = 1;
     }
     ctx.save(); ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 92px system-ui'; ctx.shadowColor = '#37a7ff'; ctx.shadowBlur = 30;
-    ctx.fillText('QR SMASH', W / 2, 300); ctx.fillStyle = '#37a7ff'; ctx.fillText('ARENA', W / 2, 392);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 80px system-ui'; ctx.shadowColor = '#37a7ff'; ctx.shadowBlur = 30;
+    ctx.fillText('QRコードバトラー', W / 2, 336);
     ctx.shadowBlur = 0; ctx.fillStyle = '#7d8aa5'; ctx.font = 'bold 24px system-ui';
-    ctx.fillText('QR が授ける戦士で、3 ターンの自動バトル', W / 2, 440);
+    ctx.fillText('QR が授ける戦士で、3 ターンの自動バトル', W / 2, 392);
     const blink = (Math.sin(titleT * 5) + 1) / 2; ctx.globalAlpha = 0.5 + blink * 0.5;
     ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 44px system-ui'; ctx.fillText('▶ [1] 1P  vs  CPU', W / 2, 530);
     ctx.fillStyle = '#4cd964'; ctx.fillText('▶ [2] 2P  対戦', W / 2, 590);
@@ -285,8 +285,8 @@
       ctx.fillStyle = '#fff'; ctx.font = 'bold 40px system-ui';
       const who = mode === '1P' ? (winner === 0 ? 'YOU WIN!' : 'CPU WIN') : ('PLAYER ' + (winner + 1) + ' WIN!');
       ctx.fillText(who, W / 2, cy + sz + 112);
-      ctx.fillStyle = f.meta.color; ctx.font = 'bold 26px system-ui';
-      ctx.fillText(f.name + '  (' + f.attribute + '・TIER ' + f.tier + ')', W / 2, cy + sz + 148);
+      ctx.fillStyle = f.meta.color; ctx.font = 'bold 28px system-ui';
+      ctx.fillText(f.attribute + ' 属性  ・  TIER ' + f.tier, W / 2, cy + sz + 148);
     }
     if (resultTimer > 1.0) {
       ctx.globalAlpha = (Math.sin(titleT * 5) + 1) / 2; ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 26px system-ui';

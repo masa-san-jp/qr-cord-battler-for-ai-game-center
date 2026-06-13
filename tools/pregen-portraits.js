@@ -23,7 +23,7 @@ const ROLE_EN = {
 function promptFor(f) {
   const el = (f.meta && f.meta.label) || 'elemental';
   const role = ROLE_EN[f.role] || 'fighter';
-  return `a ${f.rarity} rank ${el.toLowerCase()} ${role} monster, fighting game ` +
+  return `a tier ${f.tier || 'B'} ${el.toLowerCase()} ${role} monster, fighting game ` +
     `character, anime game art, bold outline, dynamic pose, vivid colors, ` +
     `centered, plain dark background, no text`;
 }

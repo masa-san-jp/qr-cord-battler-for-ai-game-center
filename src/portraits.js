@@ -22,7 +22,7 @@
   function promptFor(f) {
     var el = (f.meta && f.meta.label) || 'elemental';
     var role = ROLE_EN[f.role] || 'fighter';
-    return 'a ' + f.rarity + ' rank ' + el.toLowerCase() + ' ' + role +
+    return 'a tier ' + (f.tier || 'B') + ' ' + el.toLowerCase() + ' ' + role +
       ' monster, fighting game character, anime game art, bold outline, ' +
       'dynamic pose, vivid colors, centered, plain dark background, no text';
   }
