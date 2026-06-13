@@ -31,3 +31,4 @@
 - `14:54 JST` **[maid]** 画面リスト docs/screens.md + 画面イシュー3件作成(#1タイトルP0/#2バトルP0/#3結果P1・いずれもgame.js baseline確認軸)。QR SMASH ARENAはbaseline実装済み
 - `15:00 JST` **[maid]** 🫀 稼働中（直近: log(maid): 画面リスト docs/screens.md + 画面イシュー3件作成(#1タイトルP0/#2バトルP0/#3結果P1・いずれもgame.js baseline確認軸)。QR SMASH ARENAはbaseline実装済み）
 - `15:15 JST` **[aiko-dev]** 🫀 稼働中（直近: log(maid): 🫀 稼働中（直近: log(maid): 画面リスト docs/screens.md + 画面イシュー3件作成(#1タイトルP0/#2バトルP0/#3結果P1・いずれもgame.js baseline確認軸)。QR SMASH ARENAはbaseline実装済み））
+- `15:30 JST` **[aiko-pr]** 🫀 稼働中（直近: Show big AI character instead of QR; simplify rendering）
