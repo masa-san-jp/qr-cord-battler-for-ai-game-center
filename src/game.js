@@ -47,7 +47,10 @@
   let state = 'TITLE', mode = '1P', fighters = null, battle = null;
   let winner = -1, resultTimer = 0, slowmo = 1;
   let titlePreview = null, titleT = 0, showcaseIdx = 0;
+  let scan = { phase: 'idle', msg: '' }, summon = { phase: 'idle', msg: '', t: 0 }, scanSeq = 0;
   const SHOWCASE = ['ドラゴン', 'フェニックス', 'カミナリ', 'もりのぬし', 'ひかりのきし', 'やみのおう'];
+  // GB10 上で QR文字列→LLM(パラメータ+プロンプト)→画像 を返すエンドポイント（実機 localhost のみ）
+  const FIGHTER_API = (window.IMGGEN_ENDPOINT || 'http://127.0.0.1:8771') + '/fighter';
   const PANEL = [
     { gx: 80, gy: 180, gsize: 420, side: 'left' },
     { gx: 780, gy: 180, gsize: 420, side: 'right' },
@@ -64,22 +67,59 @@
     return f;
   }
 
-  function startRound(m) {
+  // fighters[] が用意済みの前提で対戦を開始する
+  function beginBattle(m) {
     mode = m;
-    const p1 = urlParam('p1'), p2 = urlParam('p2');
-    if (m === '1P') {
-      fighters = [makeFighter(0, p1 || pickShowcase()), makeFighter(1, pickShowcase())]; // 右=CPU ランダム素材
-    } else {
-      fighters = [makeFighter(0, p1 || pickShowcase()), makeFighter(1, p2 || pickShowcase())]; // 左=先行 右=後行
-    }
     if (window.QRPortraits) { QRPortraits.request(fighters[0]); QRPortraits.request(fighters[1]); }
-    // ターン順：素早さが高い方が先攻（同値は先行=左）
-    const first = fighters[0].spd >= fighters[1].spd ? 0 : 1;
+    const first = fighters[0].spd >= fighters[1].spd ? 0 : 1; // 素早さが高い方が先攻（同値は左）
     battle = { seq: [], i: 0, timer: 1.0, log: sideLabel(first) + ' が先攻！' };
     for (let t = 0; t < 3; t++) { battle.seq.push(first, 1 - first); } // 3 ターン × 2 攻撃
     particles = []; floaters = []; projectiles = []; shake = 0; flash = 0;
     winner = -1; resultTimer = 0; slowmo = 1;
     state = 'BATTLE';
+  }
+
+  function startRound(m, p1override) {
+    const p1 = p1override || urlParam('p1'), p2 = urlParam('p2');
+    if (m === '1P') fighters = [makeFighter(0, p1 || pickShowcase()), makeFighter(1, pickShowcase())]; // 右=CPU ランダム
+    else fighters = [makeFighter(0, p1 || pickShowcase()), makeFighter(1, p2 || pickShowcase())]; // 左=先行 右=後行
+    beginBattle(m);
+  }
+
+  function tierColorOf(label) { const t = (C.TIERS || []).find((x) => x.label === label); return t ? t.color : '#5ad1ff'; }
+
+  // GB10 が返したスペック（パラメータ＋生成画像）から自キャラを組む
+  function fighterFromSpec(idx, spec) {
+    const key = 'scan-' + (scanSeq++);
+    const f = {
+      text: 'scanned', hex: key, attribute: spec.attribute,
+      meta: C.ATTR_META[spec.attribute] || C.ATTR_META['火'],
+      tier: spec.tier, tierTotal: spec.tierTotal, tierColor: tierColorOf(spec.tier),
+      hp: spec.hp, maxhp: spec.hp, atk: spec.atk, def: spec.def, spd: spec.spd,
+      ctr: spec.ctr, ctrPct: spec.ctrPct, hitFlash: 0, panel: PANEL[idx],
+    };
+    if (window.QRPortraits && spec.image) QRPortraits.setImage(key, spec.image);
+    return f;
+  }
+
+  function enterScan() {
+    state = 'SCAN'; scan = { phase: 'starting', msg: 'カメラを起動しています…' };
+    if (!window.QRScanner) { scan = { phase: 'error', msg: 'スキャナを読み込めません' }; return; }
+    QRScanner.start().then((ok) => {
+      scan = ok ? { phase: 'scanning', msg: 'QR コードをカメラにかざしてください' }
+                : { phase: 'error', msg: 'カメラを使えません（' + (QRScanner.error() || '') + '）　C で戻る' };
+    });
+  }
+
+  // QR 文字列 → GB10 でリアルタイム生成（パラメータ＋画像）→ 対戦開始
+  function startSummon(text) {
+    if (window.QRScanner) QRScanner.stop();
+    addFlash('#fff', 0.7);
+    state = 'SUMMON'; summon = { phase: 'gen', msg: 'GB10 が戦士を生成中…', t: 0, qr: text };
+    fetch(FIGHTER_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ qr: text }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('http ' + r.status))))
+      .then((spec) => { fighters = [fighterFromSpec(0, spec), makeFighter(1, pickShowcase())]; beginBattle('1P'); })
+      .catch(() => { startRound('1P', text); }); // 生成サーバ不通でも簡易生成で必ず遊べる
   }
 
   const charCenter = (f) => ({ x: f.panel.gx + f.panel.gsize / 2, y: f.panel.gy + f.panel.gsize / 2 });
@@ -152,11 +192,26 @@
         titleT = 0;
       }
       if (consumePressed('Digit1') || consumePressed('Numpad1')) startRound('1P');
+      else if (consumePressed('Digit3') || consumePressed('Numpad3')) enterScan();
       else if (consumePressed('Digit2') || consumePressed('Numpad2')) startRound('2P');
       else if (tap.any) { tap.any = false; startRound('1P'); }
       tap.any = false;
       return;
     }
+
+    if (state === 'SCAN') {
+      if (consumePressed('KeyC') || consumePressed('Escape') || consumePressed('Backspace')) {
+        if (window.QRScanner) QRScanner.stop(); state = 'TITLE'; titlePreview = null; titleT = 3; tap.any = false; return;
+      }
+      if (scan.phase === 'scanning' && window.QRScanner) {
+        const r = QRScanner.poll();
+        if (r && r.text) { startSummon(r.text); return; }
+      }
+      tap.any = false;
+      return;
+    }
+
+    if (state === 'SUMMON') { summon.t += dt; tap.any = false; return; }
 
     if (state === 'BATTLE') {
       for (let i = 0; i < 2; i++) fighters[i].hitFlash = Math.max(0, fighters[i].hitFlash - dt * 4);
@@ -262,11 +317,12 @@
     ctx.fillText('QRコードバトラー', W / 2, 336);
     ctx.shadowBlur = 0; ctx.fillStyle = '#7d8aa5'; ctx.font = 'bold 24px system-ui';
     ctx.fillText('QR が授ける戦士で、3 ターンの自動バトル', W / 2, 392);
-    const blink = (Math.sin(titleT * 5) + 1) / 2; ctx.globalAlpha = 0.5 + blink * 0.5;
-    ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 44px system-ui'; ctx.fillText('▶ [1] 1P  vs  CPU', W / 2, 530);
-    ctx.fillStyle = '#4cd964'; ctx.fillText('▶ [2] 2P  対戦', W / 2, 590);
-    ctx.globalAlpha = 1; ctx.fillStyle = '#55607a'; ctx.font = 'bold 20px system-ui';
-    ctx.fillText('1 か 2 を押す（画面タップでも開始）', W / 2, 660);
+    const blink = (Math.sin(titleT * 5) + 1) / 2; ctx.globalAlpha = 0.55 + blink * 0.45;
+    ctx.fillStyle = '#5ad1ff'; ctx.font = 'bold 42px system-ui'; ctx.fillText('▶ [3] QR を読み込んで召喚', W / 2, 506);
+    ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 36px system-ui'; ctx.fillText('[1] 1P vs CPU（ランダム）', W / 2, 558);
+    ctx.fillStyle = '#4cd964'; ctx.fillText('[2] 2P 対戦', W / 2, 604);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#55607a'; ctx.font = 'bold 19px system-ui';
+    ctx.fillText('数字キーで選択（画面タップ＝1P）', W / 2, 660);
     ctx.restore();
   }
 
@@ -294,12 +350,51 @@
     }
   }
 
+  function drawScan() {
+    const bw = 760, bh = 500, bx = W / 2 - bw / 2, by = 90;
+    ctx.fillStyle = '#0a0e1c'; ctx.fillRect(bx, by, bw, bh);
+    if (window.QRScanner && scan.phase === 'scanning') {
+      ctx.save(); ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
+      QRScanner.drawVideo(ctx, bx, by, bw, bh); ctx.restore();
+      const s = 280, rx = W / 2 - s / 2, ry = by + bh / 2 - s / 2, L = 48;
+      ctx.strokeStyle = '#ffe14d'; ctx.lineWidth = 6;
+      const corner = (cx, cy, dx, dy) => { ctx.beginPath(); ctx.moveTo(cx, cy + dy * L); ctx.lineTo(cx, cy); ctx.lineTo(cx + dx * L, cy); ctx.stroke(); };
+      corner(rx, ry, 1, 1); corner(rx + s, ry, -1, 1); corner(rx, ry + s, 1, -1); corner(rx + s, ry + s, -1, -1);
+    }
+    ctx.strokeStyle = '#37a7ff'; ctx.lineWidth = 4; ctx.strokeRect(bx, by, bw, bh);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = scan.phase === 'error' ? '#ff7b7b' : '#fff'; ctx.font = 'bold 32px system-ui';
+    ctx.fillText(scan.msg || '', W / 2, by + bh + 54);
+    ctx.fillStyle = '#7d8aa5'; ctx.font = 'bold 20px system-ui';
+    ctx.fillText('C で戻る', W / 2, by + bh + 90);
+  }
+
+  function drawSummon() {
+    ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    const cx = W / 2, cy = H / 2 - 30, R = 92;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate((summon.t || 0) * 3);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      ctx.globalAlpha = 0.25 + 0.75 * (i / 12); ctx.fillStyle = '#5ad1ff';
+      ctx.beginPath(); ctx.arc(Math.cos(a) * R, Math.sin(a) * R, 7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 40px system-ui';
+    ctx.fillText(summon.msg || 'GB10 が戦士を生成中…', W / 2, cy + 180);
+    ctx.fillStyle = '#7d8aa5'; ctx.font = 'bold 22px system-ui';
+    const dots = '.'.repeat(1 + (Math.floor((summon.t || 0) * 2) % 3));
+    ctx.fillText('QR の内容から、その場で生成しています' + dots, W / 2, cy + 222);
+  }
+
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawBackground();
     const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
     ctx.setTransform(1, 0, 0, 1, sx, sy);
     if (state === 'TITLE') drawTitle();
+    else if (state === 'SCAN') drawScan();
+    else if (state === 'SUMMON') drawSummon();
     else if (state === 'BATTLE') { for (let i = 0; i < 2; i++) { drawCharacter(fighters[i]); drawHeader(fighters[i]); } drawProjectiles(); drawEffects(); drawBattleCenter(); }
     else if (state === 'RESULT') drawResult();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -315,6 +410,7 @@
     for (const k in keys) if (keys[k]) keys[k].pressed = false;
     requestAnimationFrame(loop);
   }
+  window.QRBattler = { summon: startSummon, scan: enterScan }; // デモ/検証用フック
   resize();
   requestAnimationFrame(loop);
 })();

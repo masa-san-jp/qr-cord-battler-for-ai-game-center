@@ -68,6 +68,15 @@
   }
   function get(f) { var e = f && f.hex && cache[f.hex]; return e && e.state === 'ok' ? e.img : null; }
 
+  // 既に生成済みの画像（dataurl）を key に直接セット（リアルタイム生成キャラ用）
+  function setImage(key, dataurl) {
+    var e = cache[key] || (cache[key] = { img: null, state: 'load' });
+    var im = new Image();
+    im.onload = function () { e.img = im; e.state = 'ok'; };
+    im.onerror = function () { e.state = 'fail'; };
+    im.src = dataurl;
+  }
+
   // 肖像未到着でも必ず描く決定論クリーチャー。属性色・簡素（描画を軽く）。
   function placeholder(ctx, f, x, y, size) {
     var col = (f.meta && f.meta.color) || '#888', glow = (f.meta && f.meta.glow) || '#fff';
@@ -114,5 +123,5 @@
     } catch (e) { /* never break the game loop */ }
   }
 
-  global.QRPortraits = { request: request, get: get, drawBig: drawBig };
+  global.QRPortraits = { request: request, get: get, setImage: setImage, drawBig: drawBig };
 })(typeof window !== 'undefined' ? window : globalThis);
