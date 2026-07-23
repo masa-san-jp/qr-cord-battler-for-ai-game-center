@@ -32,16 +32,20 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   // ---- エフェクト ----
-  let particles = [], floaters = [], projectiles = [], shake = 0, flash = 0, flashColor = '#fff';
+  let particles = [], floaters = [], projectiles = [], rings = [], shake = 0, flash = 0, flashColor = '#fff';
+  let hitstop = 0, zoom = 0;
   function addShake(m) { shake = Math.max(shake, m); }
   function addFlash(c, a) { flashColor = c; flash = Math.max(flash, a); }
+  function addRing(x, y, color, rmax, width) { rings.push({ x, y, r: rmax * 0.18, max: rmax, color, life: 1, width: width || 6 }); }
+  function addHitstop(t) { hitstop = Math.max(hitstop, t); } // 打撃の瞬間だけ時間を止めて重みを出す
+  function addZoom(z) { zoom = Math.max(zoom, z); }
   function burst(x, y, color, n, power) {
     for (let i = 0; i < n; i++) {
-      const a = rand(0, Math.PI * 2), s = rand(0.3, 1) * power;
-      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - power * 0.3, life: rand(0.4, 0.9), max: 0.9, color, size: rand(2, 5) });
+      const a = rand(0, Math.PI * 2), s = rand(0.35, 1) * power;
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - power * 0.35, life: rand(0.4, 0.95), max: 0.95, color, size: rand(3, 7), spin: rand(-0.3, 0.3), rot: rand(0, 7) });
     }
   }
-  function floatText(x, y, text, color, size) { floaters.push({ x, y, vy: -1.4, life: 1, text, color, size: size || 30 }); }
+  function floatText(x, y, text, color, size, crit) { floaters.push({ x, y, vy: -1.5, life: 1, text, color, size: size || 30, crit: !!crit, born: 0 }); }
 
   // ---- 状態 ----
   let state = 'TITLE', mode = '1P', fighters = null, battle = null;
@@ -73,6 +77,7 @@
     if (window.QRPortraits) { QRPortraits.request(fighters[0]); QRPortraits.request(fighters[1]); }
     const first = fighters[0].spd >= fighters[1].spd ? 0 : 1; // 素早さが高い方が先攻（同値は左）
     fighters[0].fade = 1; fighters[1].fade = 1;
+    for (let i = 0; i < 2; i++) { fighters[i].lungeT = 0; fighters[i].recoilT = 0; fighters[i].bobPhase = i * 1.7; fighters[i].dir = i === 0 ? 1 : -1; }
     battle = { seq: [], i: 0, timer: 1.3, ko: null, log: sideLabel(first) + ' が先攻！' };
     for (let t = 0; t < 3; t++) { battle.seq.push(first, 1 - first); } // 3 ターン × 2 攻撃
     particles = []; floaters = []; projectiles = []; shake = 0; flash = 0;
@@ -127,7 +132,10 @@
 
   function fireFx(aIdx) {
     const s = charCenter(fighters[aIdx]), t = charCenter(fighters[1 - aIdx]);
-    projectiles.push({ x: s.x, y: s.y, sx: s.x, sy: s.y, tx: t.x, ty: t.y, t: 0, color: fighters[aIdx].meta.color, glow: fighters[aIdx].meta.glow });
+    const m = fighters[aIdx].meta;
+    projectiles.push({ x: s.x, y: s.y, sx: s.x, sy: s.y, tx: t.x, ty: t.y, t: 0, color: m.color, glow: m.glow, trail: [] });
+    fighters[aIdx].lungeT = 1;                 // 攻撃側が踏み込む
+    addRing(s.x, s.y, m.glow, 90, 5);          // 発射のマズルフラッシュ
     if (window.SFX) SFX.fire();
   }
 
@@ -149,19 +157,24 @@
     // 命中：攻撃力ベース × 属性相性
     const aff = C.affinityMultiplier(A.attribute, B.attribute);
     const dmg = Math.max(1, Math.round(A.atk * 0.22 * aff));
-    B.hp = Math.max(0, B.hp - dmg); B.hitFlash = 1;
-    burst(cb.x, cb.y, A.meta.glow, 30, 11); addShake(18); addFlash(A.meta.glow, 0.22);
-    floatText(cb.x + rand(-20, 20), cb.y - 30, (aff > 1 ? '効果抜群! ' : '') + dmg, aff > 1 ? '#ffe14d' : '#fff', 54);
-    battle.log = aL + ' の攻撃 → ' + dmg + ' ダメージ' + (aff > 1 ? '（効果抜群）' : '');
-    if (window.SFX) { SFX.hit(A.attribute, dmg); if (aff > 1) SFX.superEffective(); }
+    B.hp = Math.max(0, B.hp - dmg); B.hitFlash = 1; B.recoilT = 1; // 被弾側がのけぞる
+    const crit = aff > 1;
+    burst(cb.x, cb.y, A.meta.glow, crit ? 42 : 28, crit ? 14 : 11);
+    addRing(cb.x, cb.y, crit ? '#ffe14d' : A.meta.glow, crit ? 200 : 150, crit ? 9 : 6);
+    addShake(crit ? 26 : 18); addFlash(A.meta.glow, crit ? 0.32 : 0.2);
+    addHitstop(crit ? 0.1 : 0.06); addZoom(crit ? 0.05 : 0.025);
+    floatText(cb.x + rand(-16, 16), cb.y - 30, (crit ? '効果抜群! ' : '') + dmg, crit ? '#ffe14d' : '#fff', crit ? 62 : 50, crit);
+    battle.log = aL + ' の攻撃 → ' + dmg + ' ダメージ' + (crit ? '（効果抜群）' : '');
+    if (window.SFX) { SFX.hit(A.attribute, dmg); if (crit) SFX.superEffective(); }
     if (B.hp <= 0) return;
     // カウンター：B が確率で反撃
     if (Math.random() * 100 < B.ctrPct) {
       const cd = Math.max(1, Math.round(B.atk * 0.22 * C.affinityMultiplier(B.attribute, A.attribute)));
-      A.hp = Math.max(0, A.hp - cd); A.hitFlash = 1;
+      A.hp = Math.max(0, A.hp - cd); A.hitFlash = 1; A.recoilT = 1; B.lungeT = 1;
       const ca = charCenter(A);
-      burst(ca.x, ca.y, B.meta.glow, 22, 9); addShake(14); addFlash(B.meta.glow, 0.2);
-      floatText(ca.x, ca.y - 30, 'COUNTER ' + cd, '#ff7be0', 36);
+      burst(ca.x, ca.y, B.meta.glow, 24, 9); addRing(ca.x, ca.y, '#ff7be0', 140, 6);
+      addShake(16); addFlash(B.meta.glow, 0.2); addHitstop(0.07); addZoom(0.03);
+      floatText(ca.x, ca.y - 30, 'COUNTER ' + cd, '#ff7be0', 40, true);
       battle.log += '  ' + bL + ' のカウンター → ' + cd;
       if (window.SFX) SFX.counter();
     }
@@ -178,21 +191,26 @@
     if (winner === -2) { gotoResult(); return; } // 引き分けは即結果
     const loser = 1 - winner;
     battle.ko = { loser: loser, t: 0 };
-    addFlash('#fff', 0.9); addShake(32);
+    fighters[winner].lungeT = 1; fighters[loser].recoilT = 1;
+    addFlash('#fff', 0.95); addShake(34); addHitstop(0.14); addZoom(0.07);
+    const c = charCenter(fighters[loser]);
+    addRing(c.x, c.y, fighters[loser].meta.glow, 260, 10); burst(c.x, c.y, fighters[loser].meta.glow, 80, 15);
     if (window.SFX) SFX.ko();
-    const c = charCenter(fighters[loser]); burst(c.x, c.y, fighters[loser].meta.glow, 70, 14);
     battle.log = sideLabel(winner) + ' の勝利！';
   }
 
   // ---- 更新 ----
   function update(dt) {
     titleT += dt;
-    for (const p of particles) { p.life -= dt; p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.vx *= 0.99; }
+    for (const p of particles) { p.life -= dt; p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.vx *= 0.99; p.rot += p.spin; }
     particles = particles.filter((p) => p.life > 0);
-    for (const f of floaters) { f.life -= dt * 1.4; f.y += f.vy; f.vy *= 0.96; }
+    for (const f of floaters) { f.life -= dt * 1.4; f.y += f.vy; f.vy *= 0.96; f.born += dt; }
     floaters = floaters.filter((f) => f.life > 0);
-    shake *= 0.86; flash *= 0.9;
+    for (const r of rings) { r.r += (r.max - r.r) * Math.min(1, dt * 9); r.life -= dt * 2.2; }
+    rings = rings.filter((r) => r.life > 0);
+    shake *= 0.86; flash *= 0.9; zoom *= 0.88;
     for (const p of projectiles) {
+      p.trail.push({ x: p.x, y: p.y }); if (p.trail.length > 12) p.trail.shift();
       p.t += dt / 0.32; const e = p.t < 1 ? p.t : 1;
       p.x = p.sx + (p.tx - p.sx) * e; p.y = p.sy + (p.ty - p.sy) * e - Math.sin(e * Math.PI) * 120;
     }
@@ -228,7 +246,18 @@
     if (state === 'SUMMON') { summon.t += dt; tap.any = false; return; }
 
     if (state === 'BATTLE') {
-      for (let i = 0; i < 2; i++) fighters[i].hitFlash = Math.max(0, fighters[i].hitFlash - dt * 4);
+      const bt = titleT;
+      for (let i = 0; i < 2; i++) {
+        const f = fighters[i];
+        f.hitFlash = Math.max(0, f.hitFlash - dt * 4);
+        f.lungeT = Math.max(0, (f.lungeT || 0) - dt * 3.2);
+        f.recoilT = Math.max(0, (f.recoilT || 0) - dt * 4);
+        const dir = f.dir || (i === 0 ? 1 : -1);
+        const lunge = f.lungeT * f.lungeT;                       // ease した踏み込み
+        const wob = Math.sin(bt * 2.4 + (f.bobPhase || 0));
+        f.anim = { x: dir * 70 * lunge - dir * 46 * f.recoilT, y: wob * 5, scale: 1 + 0.12 * lunge + 0.05 * f.recoilT, scaleY: 1 - 0.06 * f.recoilT + 0.03 * wob };
+      }
+      if (hitstop > 0) { hitstop -= dt; return; }                 // ヒットストップ中は時間停止
       // KO 演出：負けた方をフェードアウトで消してから結果へ（重厚な締め）
       if (battle.ko) {
         const dur = 1.8; battle.ko.t += dt;
@@ -273,58 +302,83 @@
     const p = f.panel;
     const a = (typeof f.fade === 'number') ? f.fade : 1;
     if (a <= 0.001) return; // フェードアウトで消滅
+    const an = f.anim || {};
+    const cx = p.gx + p.gsize / 2, cy = p.gy + p.gsize / 2;
+    ctx.save();
     if (a < 1) ctx.globalAlpha = a;
+    ctx.translate(cx + (an.x || 0), cy + (an.y || 0));
+    ctx.scale(an.scale || 1, an.scaleY || an.scale || 1);
+    ctx.translate(-cx, -cy);
     if (window.QRPortraits) QRPortraits.drawBig(ctx, f, p.gx, p.gy, p.gsize, f.hitFlash || 0);
     else { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(p.gx, p.gy, p.gsize, p.gsize); ctx.strokeStyle = f.meta.color; ctx.lineWidth = 4; ctx.strokeRect(p.gx, p.gy, p.gsize, p.gsize); }
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
+  // HUD は最小限：名前・属性/TIER・HP バーだけ（数字の羅列は出さない）
   function drawHeader(f) {
-    const left = f.panel.side === 'left';
-    const x = left ? f.panel.gx : f.panel.gx + f.panel.gsize;
+    const p = f.panel, left = p.side === 'left';
+    const x = left ? p.gx : p.gx + p.gsize;
     ctx.textAlign = left ? 'left' : 'right';
-    ctx.fillStyle = f.meta.color; ctx.font = 'bold 26px system-ui';
-    ctx.fillText(f.meta.label + ' / ' + f.attribute, x, 62);
-    ctx.fillStyle = f.tierColor; ctx.font = 'bold 26px system-ui';
-    ctx.fillText('TIER ' + f.tier + '（計 ' + f.tierTotal + '）', x, 98);
-    // HP バー（キャラ上）
-    const bw = f.panel.gsize, bx = f.panel.gx, ratio = clamp(f.hp / f.maxhp, 0, 1);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(bx, 122, bw, 18);
+    ctx.fillStyle = f.meta.color; ctx.font = 'bold 30px system-ui';
+    ctx.fillText(f.meta.label, x, 60);
+    ctx.fillStyle = f.tierColor; ctx.font = 'bold 18px system-ui';
+    ctx.fillText(f.attribute + ' 属性  ・  TIER ' + f.tier, x, 88);
+    // HP バー（太め）
+    const bw = p.gsize, bx = p.gx, ratio = clamp(f.hp / f.maxhp, 0, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(bx, 104, bw, 18);
     ctx.fillStyle = ratio > 0.3 ? f.meta.color : '#ff3b3b';
-    ctx.fillRect(left ? bx : bx + bw - bw * ratio, 122, bw * ratio, 18);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = left ? 'left' : 'right';
-    ctx.fillText('HP ' + Math.ceil(f.hp) + ' / ' + f.maxhp, x, 158);
-    // 5 パラメータ（キャラ下）
-    ctx.textAlign = 'center'; ctx.font = 'bold 19px system-ui'; ctx.fillStyle = '#cdd6ee';
-    ctx.fillText('攻 ' + f.atk + '   防 ' + f.def + '   速 ' + f.spd + '   反 ' + f.ctrPct + '%', f.panel.gx + f.panel.gsize / 2, f.panel.gy + f.panel.gsize + 26);
+    ctx.fillRect(left ? bx : bx + bw - bw * ratio, 104, bw * ratio, 18);
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.strokeRect(bx, 104, bw, 18);
+    ctx.fillStyle = '#dbe4ff'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = left ? 'left' : 'right';
+    ctx.fillText(Math.ceil(f.hp) + ' / ' + f.maxhp, x, 138);
   }
 
   function drawBattleCenter() {
     ctx.textAlign = 'center';
     const turn = Math.min(3, Math.floor(battle.i / 2) + 1);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 40px system-ui';
-    ctx.fillText('TURN ' + turn + ' / 3', W / 2, 66);
-    ctx.fillStyle = '#9fb3d9'; ctx.font = 'bold 18px system-ui';
-    ctx.fillText('VS', W / 2, 92);
-    ctx.fillStyle = '#e8f0ff'; ctx.font = 'bold 22px system-ui';
-    ctx.fillText(battle.log || '', W / 2, H - 26);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 24px system-ui';
+    ctx.fillText('TURN ' + turn + ' / 3', W / 2, 38);
+    ctx.fillStyle = '#e8f0ff'; ctx.font = 'bold 24px system-ui';
+    ctx.fillText(battle.log || '', W / 2, H - 24);
   }
 
   function drawProjectiles() {
     for (const p of projectiles) {
-      ctx.save(); ctx.globalAlpha = 0.9; const r = 16;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < p.trail.length; i++) {   // 尾を引くトレイル
+        const q = p.trail[i], k = i / p.trail.length;
+        ctx.globalAlpha = k * 0.5; ctx.fillStyle = p.glow;
+        ctx.beginPath(); ctx.arc(q.x, q.y, 4 + k * 12, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1; const r = 18;           // 弾頭（白コア＋属性グロー）
       const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-      grd.addColorStop(0, '#fff'); grd.addColorStop(0.4, p.glow); grd.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      grd.addColorStop(0, '#fff'); grd.addColorStop(0.35, p.glow); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     }
   }
   function drawEffects() {
-    for (const p of particles) { ctx.globalAlpha = clamp(p.life / p.max, 0, 1); ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); }
+    // 衝撃波リング（加算合成で光らせる）
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const r of rings) {
+      ctx.globalAlpha = clamp(r.life, 0, 1) * 0.8; ctx.strokeStyle = r.color; ctx.lineWidth = r.width * clamp(r.life, 0.2, 1);
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+    // 破片（回転する四角）
+    for (const p of particles) {
+      ctx.save(); ctx.globalAlpha = clamp(p.life / p.max, 0, 1); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); ctx.restore();
+    }
     ctx.globalAlpha = 1;
+    // ダメージ数字（出た瞬間だけ大きくポップ）
     for (const f of floaters) {
-      ctx.globalAlpha = clamp(f.life, 0, 1); ctx.textAlign = 'center'; ctx.fillStyle = f.color;
-      ctx.font = 'bold ' + f.size + 'px system-ui'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4;
-      ctx.strokeText(f.text, f.x, f.y); ctx.fillText(f.text, f.x, f.y);
+      const pop = f.born < 0.14 ? 1.5 - (f.born / 0.14) * 0.5 : 1;
+      ctx.globalAlpha = clamp(f.life, 0, 1); ctx.textAlign = 'center';
+      ctx.font = 'bold ' + (f.size * pop) + 'px system-ui'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 5; ctx.strokeText(f.text, f.x, f.y);
+      if (f.crit) { ctx.shadowColor = f.color; ctx.shadowBlur = 16; }
+      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y); ctx.shadowBlur = 0;
     }
     ctx.globalAlpha = 1;
   }
@@ -415,7 +469,8 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawBackground();
     const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
-    ctx.setTransform(1, 0, 0, 1, sx, sy);
+    const z = 1 + zoom;                                  // 打撃時のズームパンチ（中心固定）
+    ctx.setTransform(z, 0, 0, z, sx + (W / 2) * (1 - z), sy + (H / 2) * (1 - z));
     if (state === 'TITLE') drawTitle();
     else if (state === 'SCAN') drawScan();
     else if (state === 'SUMMON') drawSummon();
