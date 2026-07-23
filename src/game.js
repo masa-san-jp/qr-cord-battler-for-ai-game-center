@@ -128,6 +128,7 @@
   function fireFx(aIdx) {
     const s = charCenter(fighters[aIdx]), t = charCenter(fighters[1 - aIdx]);
     projectiles.push({ x: s.x, y: s.y, sx: s.x, sy: s.y, tx: t.x, ty: t.y, t: 0, color: fighters[aIdx].meta.color, glow: fighters[aIdx].meta.glow });
+    if (window.SFX) SFX.fire();
   }
 
   // 1 回の攻撃を解決する（回避→命中→ダメージ→カウンター）
@@ -152,6 +153,7 @@
     burst(cb.x, cb.y, A.meta.glow, 30, 11); addShake(18); addFlash(A.meta.glow, 0.22);
     floatText(cb.x + rand(-20, 20), cb.y - 30, (aff > 1 ? '効果抜群! ' : '') + dmg, aff > 1 ? '#ffe14d' : '#fff', 54);
     battle.log = aL + ' の攻撃 → ' + dmg + ' ダメージ' + (aff > 1 ? '（効果抜群）' : '');
+    if (window.SFX) { SFX.hit(A.attribute, dmg); if (aff > 1) SFX.superEffective(); }
     if (B.hp <= 0) return;
     // カウンター：B が確率で反撃
     if (Math.random() * 100 < B.ctrPct) {
@@ -161,11 +163,13 @@
       burst(ca.x, ca.y, B.meta.glow, 22, 9); addShake(14); addFlash(B.meta.glow, 0.2);
       floatText(ca.x, ca.y - 30, 'COUNTER ' + cd, '#ff7be0', 36);
       battle.log += '  ' + bL + ' のカウンター → ' + cd;
+      if (window.SFX) SFX.counter();
     }
   }
 
   function gotoResult() {
     state = 'RESULT'; resultTimer = 0; slowmo = 0.25; addFlash('#fff', 0.6); addShake(18);
+    if (window.SFX) SFX.win();
   }
   // 勝敗を確定し、敗者をフェードアウトさせる演出に入る（KO も判定も共通）
   function endBattle() {
@@ -175,6 +179,7 @@
     const loser = 1 - winner;
     battle.ko = { loser: loser, t: 0 };
     addFlash('#fff', 0.9); addShake(32);
+    if (window.SFX) SFX.ko();
     const c = charCenter(fighters[loser]); burst(c.x, c.y, fighters[loser].meta.glow, 70, 14);
     battle.log = sideLabel(winner) + ' の勝利！';
   }
@@ -201,9 +206,9 @@
         if (window.QRPortraits) { QRPortraits.request(titlePreview[0]); QRPortraits.request(titlePreview[1]); }
         titleT = 0;
       }
-      if (consumePressed('Digit1') || consumePressed('Numpad1')) enterScan();        // vs CPU = QR で自分を召喚 → CPU 戦
-      else if (consumePressed('Digit2') || consumePressed('Numpad2')) startRound('2P');
-      else if (tap.any) { tap.any = false; enterScan(); }
+      if (consumePressed('Digit1') || consumePressed('Numpad1')) { if (window.SFX) SFX.start(); enterScan(); }        // vs CPU = QR で自分を召喚 → CPU 戦
+      else if (consumePressed('Digit2') || consumePressed('Numpad2')) { if (window.SFX) SFX.start(); startRound('2P'); }
+      else if (tap.any) { tap.any = false; if (window.SFX) SFX.start(); enterScan(); }
       tap.any = false;
       return;
     }
@@ -340,6 +345,8 @@
     ctx.fillStyle = '#4cd964'; ctx.fillText('▶ [2] 2P 対戦', W / 2, 598);
     ctx.globalAlpha = 1; ctx.fillStyle = '#55607a'; ctx.font = 'bold 19px system-ui';
     ctx.fillText('QR を読み込んで自分の戦士を召喚 → 対戦', W / 2, 658);
+    ctx.fillStyle = '#3c465c'; ctx.font = 'bold 17px system-ui';
+    ctx.fillText((window.SFX && SFX.isMuted() ? '🔇' : '🔊') + '  M でミュート切替', W / 2, 694);
     ctx.restore();
   }
 
